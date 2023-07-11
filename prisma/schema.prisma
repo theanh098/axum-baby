@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cake {
+  id           String         @id @db.Uuid
+  name         String         @db.VarChar(255)
+  created_at   DateTime       @default(now()) @db.Timestamp(6)
+  cooker_id    String         @db.Uuid
+  cooker       Cooker         @relation(fields: [cooker_id], references: [id], onDelete: Cascade)
+  cake_filling CakeFilling[]
+  fruit        Fruit[]
+	@@map("cake")
+}
+
+model CakeFilling {
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  cake_id    String   @db.Uuid
+  filling_id String   @db.Uuid
+  cake       Cake     @relation(fields: [cake_id], references: [id], onDelete: Cascade)
+  filling    Filling  @relation(fields: [filling_id], references: [id], onDelete: Cascade)
+
+  @@id([cake_id, filling_id])
+	@@map("cake_filling")
+}
+
+model Cooker {
+  id         String   @id @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  nick_name  String   @db.VarChar(255)
+  cake       Cake[]
+	@@map("cooker")
+}
+
+model Filling {
+  id           String         @id @db.Uuid
+  created_at   DateTime       @default(now()) @db.Timestamp(6)
+  name         String         @db.VarChar(255)
+  cake_filling CakeFilling[]
+	@@map("filling")
+}
+
+model Fruit {
+  id         String   @id @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  name       String   @db.VarChar(255)
+  cake_id    String   @db.Uuid
+  cake       Cake     @relation(fields: [cake_id], references: [id], onDelete: Cascade)
+	@@map("fruit")
+}
