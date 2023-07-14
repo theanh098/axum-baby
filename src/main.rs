@@ -1,19 +1,57 @@
+mod database;
+mod open_api;
+mod services;
+mod utils;
 use axum::{
   routing::{get, post},
   Router,
 };
-mod routes;
+use database::prisma::PrismaClient;
+use dotenv::dotenv;
+use open_api::ApiDoc;
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(Clone)]
+pub struct AppState {
+  prisma_client: Arc<PrismaClient>,
+  redis_client: redis::Client,
+}
 
 #[tokio::main]
 async fn main() {
-  // build our application with a single route
-  let app = Router::new()
-    .route("/", get(|| async { "Hello, World!" }))
-    .route("/query", get(routes::query::get_query_string_as_a_struct))
-    .route("/body", post(routes::body::get_json_body))
-    .route("/path/:userid", get(routes::path::get_path));
+  dotenv().ok();
 
-  // run it with hyper on localhost:3000
+  let prisma_client = Arc::new(
+    PrismaClient::_builder()
+      .build()
+      .await
+      .expect("creating prisma was wrong"),
+  );
+
+  let redis_client = redis::Client::open("redis://127.0.0.1/").expect("opening redis client fail");
+
+  let app_state = AppState {
+    prisma_client,
+    redis_client,
+  };
+
+  let app = Router::new()
+    .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
+    .route("/auth/nonce", get(services::auth::get_nonce))
+    .route("/auth/login", post(services::auth::login))
+    .route("/users", get(services::user::who_am_i))
+    .layer(
+      CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any),
+    )
+    .with_state(app_state);
+
+  // run it with hyper on localhost:8080
   axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
     .serve(app.into_make_service())
     .await

@@ -1,55 +1,317 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Cake {
-  id           String         @id @db.Uuid
-  name         String         @db.VarChar(255)
-  created_at   DateTime       @default(now()) @db.Timestamp(6)
-  cooker_id    String         @db.Uuid
-  cooker       Cooker         @relation(fields: [cooker_id], references: [id], onDelete: Cascade)
-  cake_filling CakeFilling[]
-  fruit        Fruit[]
-	@@map("cake")
+generator client {
+    // Corresponds to the cargo alias created earlier
+    provider      = "cargo prisma"
+    // The location to generate the client. Is relative to the position of the schema
+    output        = "../src/database/prisma.rs"
+    module_path   = "database::prisma"
 }
 
-model CakeFilling {
+model Activity {
+  id          Int          @id @default(autoincrement())
+  created_at  DateTime     @default(now()) @db.Timestamp(6)
+  kind        ActivityKind
+  user_id     Int
+  review_id   Int?
+  point       Int
+  campaign_id Int?
+  platform_id String?
+  campaigns   Campaign?    @relation(fields: [campaign_id], references: [id])
+  reviews     Review?      @relation(fields: [review_id], references: [id])
+  user        User         @relation(fields: [user_id], references: [id])
+
+  @@map("activity")
+}
+
+model Banner {
+  id           Int      @id @default(autoincrement())
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  expried_time DateTime @db.Timestamp(6)
+  source_id    Int
+  storages     Storage  @relation(fields: [source_id], references: [id])
+
+  @@map("banner")
+}
+
+model Business {
+  id                      Int                @id @default(autoincrement())
+  created_at              DateTime           @default(now()) @db.Timestamp(6)
+  name                    String             @unique @db.VarChar
+  overview                String             @db.VarChar
+  token                   String?            @db.VarChar
+  logo                    String?            @db.VarChar
+  founder_name            String?            @db.VarChar
+  start_date              DateTime?          @db.Timestamp(6)
+  address                 String?            @db.VarChar
+  whitepaper_url          String?            @db.VarChar
+  contract_address        String?            @db.VarChar
+  website                 String?            @db.VarChar
+  types                   String[]           @db.VarChar
+  main_category           String             @db.VarChar
+  chains                  String[]           @db.VarChar
+  cmc_id                  Int?
+  contract_chain          String?            @db.VarChar
+  status                  BusinessStatus     @default(pending)
+  tags                    String[]           @db.VarChar
+  creator_id              Int
+  super_users             SuperUser          @relation(fields: [creator_id], references: [id])
+  followers_on_businesses FollowerBusiness[]
+  medias                  Media[]
+  notifications           Notification[]
+  reviews                 Review[]
+
+  @@index([cmc_id])
+  @@index([cmc_id, token])
+  @@index([main_category])
+  @@index([main_category, types])
+  @@index([token])
+  @@index([types])
+  @@map("business")
+}
+
+model Campaign {
+  id                 Int            @id @default(autoincrement())
+  created_at         DateTime       @default(now()) @db.Timestamp(6)
+  title              String         @db.VarChar
+  description        String         @db.VarChar
+  metadata           String?        @db.VarChar
+  activities         Activity[]
+  users_on_campaigns UserCampaign[]
+
+  @@map("campaign")
+}
+
+model CriteriaReview {
+  id        Int    @id @default(autoincrement())
+  name      String
+  value     Int
+  review_id Int
+  reviews   Review @relation(fields: [review_id], references: [id], onDelete: Cascade)
+
+  @@map("criteria_review")
+}
+
+model Did {
+  id         Int     @id @default(autoincrement())
+  controller String  @unique
+  email      String?
+  username   String? @unique
+  users      User[]
+
+  @@map("did")
+}
+
+model Email {
+  id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  cake_id    String   @db.Uuid
-  filling_id String   @db.Uuid
-  cake       Cake     @relation(fields: [cake_id], references: [id], onDelete: Cascade)
-  filling    Filling  @relation(fields: [filling_id], references: [id], onDelete: Cascade)
+  email      String   @unique @db.VarChar
 
-  @@id([cake_id, filling_id])
-	@@map("cake_filling")
+  @@map("email")
 }
 
-model Cooker {
-  id         String   @id @db.Uuid
+
+
+model FollowerBusiness {
+  follower_id Int
+  business_id Int
+  businesses  Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [follower_id], references: [id])
+
+  @@id([follower_id, business_id])
+  @@map("follower_business")
+}
+
+model Media {
+  id          Int          @id @default(autoincrement())
+  created_at  DateTime     @default(now()) @db.Timestamp(6)
+  url         String       @db.VarChar
+  business_id Int
+  path        String?
+  source      MediaSoucres
+  businesses  Business     @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  business_id Int?
+  review_id   Int?
+  seen        Boolean   @default(false)
+  to          Int
+  from        Int?
+  meta_data   String?   @db.VarChar
+  type        String
+  businesses  Business? @relation(fields: [business_id], references: [id])
+  reviews     Review?   @relation(fields: [review_id], references: [id], onDelete: Cascade)
+  from_user   User?     @relation("notification_from_user", fields: [from], references: [id])
+  to_user     User      @relation("notification_to_user", fields: [to], references: [id])
+
+  @@map("notification")
+}
+
+
+
+model Reply {
+  id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  nick_name  String   @db.VarChar(255)
-  cake       Cake[]
-	@@map("cooker")
+  desc       String   @db.VarChar
+  review_id  Int
+  likes      Int[]    @default([])
+  dislikes   Int[]    @default([])
+  user_id    Int
+  reviews    Review   @relation(fields: [review_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@map("reply")
 }
 
-model Filling {
-  id           String         @id @db.Uuid
-  created_at   DateTime       @default(now()) @db.Timestamp(6)
-  name         String         @db.VarChar(255)
-  cake_filling CakeFilling[]
-	@@map("filling")
+model Review {
+  id               Int              @id @default(autoincrement())
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  rate             Int
+  business_id      Int
+  user_id          Int
+  status           ReviewStatuses   @default(pending)
+  likes            Int[]            @default([])
+  dislikes         Int[]            @default([])
+  headline         String?          @db.VarChar
+  comment          String?          @db.VarChar
+  txn_hash         String?          @unique
+  sharings         Int[]            @default([])
+  activities       Activity[]
+  criteria_reviews CriteriaReview[]
+  notifications    Notification[]
+  replies          Reply[]
+  businesses       Business         @relation(fields: [business_id], references: [id])
+  user             User             @relation(fields: [user_id], references: [id])
+
+  @@map("review")
 }
 
-model Fruit {
-  id         String   @id @db.Uuid
+model SearchParam {
+  id            Int    @id @default(autoincrement())
+  business_name String @unique
+  times         Int
+
+  @@map("search_param")
+}
+
+model Social {
+  id          Int       @id @default(autoincrement())
+  last_update DateTime? @db.Timestamp(6)
+  twitterId   String?   @unique
+  twitter     String?
+  discordId   String?   @unique
+  discord     String?
+  telegramId  String?   @unique
+  telegram    String?
+  user_id     Int       @unique
+  user        User      @relation(fields: [user_id], references: [id])
+
+  @@map("social")
+}
+
+model Storage {
+  id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  name       String   @db.VarChar(255)
-  cake_id    String   @db.Uuid
-  cake       Cake     @relation(fields: [cake_id], references: [id], onDelete: Cascade)
-	@@map("fruit")
+  url        String   @db.VarChar
+  tag        String?  @db.VarChar
+  banners    Banner[]
+
+  @@map("storage")
+}
+
+model SuperUser {
+  id            Int            @id @default(autoincrement())
+  role          SuperUserRoles
+  refresh_token String?        @db.VarChar
+  username      String         @unique @db.VarChar
+  password      String         @db.VarChar
+  avatar        String?        @db.VarChar
+  businesses    Business[]
+
+  @@map("super_user")
+}
+
+model User {
+  id                      Int                @id @default(autoincrement())
+  created_at              DateTime           @default(now()) @db.Timestamp(6)
+  wallet_address          String             @unique @db.VarChar
+  noti_accepted           Boolean            @default(true)
+  spam_accepted           Boolean            @default(true)
+  email                   String?            @db.VarChar
+  nickname                String?            @db.VarChar
+  avatar_url              String?            @db.VarChar
+  is_admin                Boolean            @default(false)
+  password                String?            @db.VarChar
+  background_url          String?            @db.VarChar
+  did_id                  Int?
+  last_sync_ibt           DateTime?          @db.Timestamp(6)
+  last_update             DateTime?          @db.Timestamp(6)
+  activities              Activity[]
+  followers_on_businesses FollowerBusiness[]
+  notifications           Notification[]     @relation("notification_to_user")
+  rev_notifications       Notification[]     @relation("notification_from_user")
+  replies                 Reply[]
+  reviews                 Review[]
+  socials                 Social?
+  did                     Did?               @relation(fields: [did_id], references: [id])
+  users_on_campaigns      UserCampaign[]
+
+  @@map("user")
+}
+
+model UserCampaign {
+  user_id     Int
+  campaign_id Int
+  claimed     Boolean  @default(false)
+  amount      Int
+  txnHash     String?  @db.VarChar
+  campaigns   Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@id([user_id, campaign_id])
+  @@map("user_campaign")
+}
+
+enum ActivityKind {
+  reviewapproved
+  reacthelpful
+  reactdownful
+  reply
+  share
+  join_discord
+  join_telegram
+  reward
+}
+
+enum BusinessStatus {
+  approved
+  pending
+  rejected
+}
+
+enum MediaSoucres {
+  Photo
+  Telegram
+  Discord
+  Twitter
+  Blog
+}
+
+enum ReviewStatuses {
+  approved
+  pending
+  rejected
+}
+
+enum SuperUserRoles {
+  admin
+  editor
 }

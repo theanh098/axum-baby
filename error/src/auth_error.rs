@@ -8,8 +8,8 @@ use serde_json::json;
 pub enum AuthError {
   WrongCredentials,
   MissingCredentials,
-  TokenCreation,
-  InvalidToken,
+  ExpriedCredentials,
+  WrongSignature,
 }
 
 impl IntoResponse for AuthError {
@@ -17,8 +17,8 @@ impl IntoResponse for AuthError {
     let (status, error_message) = match self {
       AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Wrong credentials"),
       AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
-      AuthError::TokenCreation => (StatusCode::INTERNAL_SERVER_ERROR, "Token creation error"),
-      AuthError::InvalidToken => (StatusCode::BAD_REQUEST, "Invalid token"),
+      AuthError::ExpriedCredentials => (StatusCode::UNAUTHORIZED, "Expried credentials"),
+      AuthError::WrongSignature => (StatusCode::UNAUTHORIZED, "Invalid signature"),
     };
     let body = Json(json!({
         "error": error_message,

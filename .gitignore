@@ -1,1 +1,3 @@
 /target
+/database/src/prisma.rs
+/dump.rdb
