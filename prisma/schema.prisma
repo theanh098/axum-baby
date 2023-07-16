@@ -4,11 +4,11 @@ datasource db {
 }
 
 generator client {
-    // Corresponds to the cargo alias created earlier
-    provider      = "cargo prisma"
-    // The location to generate the client. Is relative to the position of the schema
-    output        = "../src/database/prisma.rs"
-    module_path   = "database::prisma"
+  // Corresponds to the cargo alias created earlier
+  provider    = "cargo prisma"
+  // The location to generate the client. Is relative to the position of the schema
+  output      = "../src/database/prisma.rs"
+  module_path = "database::prisma"
 }
 
 model Activity {
@@ -38,31 +38,32 @@ model Banner {
 }
 
 model Business {
-  id                      Int                @id @default(autoincrement())
-  created_at              DateTime           @default(now()) @db.Timestamp(6)
-  name                    String             @unique @db.VarChar
-  overview                String             @db.VarChar
-  token                   String?            @db.VarChar
-  logo                    String?            @db.VarChar
-  founder_name            String?            @db.VarChar
-  start_date              DateTime?          @db.Timestamp(6)
-  address                 String?            @db.VarChar
-  whitepaper_url          String?            @db.VarChar
-  contract_address        String?            @db.VarChar
-  website                 String?            @db.VarChar
-  types                   String[]           @db.VarChar
-  main_category           String             @db.VarChar
-  chains                  String[]           @db.VarChar
-  cmc_id                  Int?
-  contract_chain          String?            @db.VarChar
-  status                  BusinessStatus     @default(pending)
-  tags                    String[]           @db.VarChar
-  creator_id              Int
-  super_users             SuperUser          @relation(fields: [creator_id], references: [id])
-  followers_on_businesses FollowerBusiness[]
-  medias                  Media[]
-  notifications           Notification[]
-  reviews                 Review[]
+  id                  Int                @id @default(autoincrement())
+  created_at          DateTime           @default(now()) @db.Timestamp(6)
+  name                String             @unique @db.VarChar
+  overview            String             @db.VarChar
+  token               String?            @db.VarChar
+  logo                String?            @db.VarChar
+  founder_name        String?            @db.VarChar
+  start_date          DateTime?          @db.Timestamp(6)
+  address             String?            @db.VarChar
+  whitepaper_url      String?            @db.VarChar
+  contract_address    String?            @db.VarChar
+  website             String?            @db.VarChar
+  types               String[]           @db.VarChar
+  main_category       String             @db.VarChar
+  chains              String[]           @db.VarChar
+  cmc_id              Int?
+  contract_chain      String?            @db.VarChar
+  status              BusinessStatus     @default(pending)
+  tags                String[]           @db.VarChar
+  creator_id          Int
+  super_users         SuperUser          @relation(fields: [creator_id], references: [id])
+  medias              Media[]
+  notifications       Notification[]
+  reviews             Review[]
+  follower_business_s FollowerBusiness[]
+  rate_business_s     RateBusiness[]
 
   @@index([cmc_id])
   @@index([cmc_id, token])
@@ -74,13 +75,13 @@ model Business {
 }
 
 model Campaign {
-  id                 Int            @id @default(autoincrement())
-  created_at         DateTime       @default(now()) @db.Timestamp(6)
-  title              String         @db.VarChar
-  description        String         @db.VarChar
-  metadata           String?        @db.VarChar
-  activities         Activity[]
-  users_on_campaigns UserCampaign[]
+  id              Int            @id @default(autoincrement())
+  created_at      DateTime       @default(now()) @db.Timestamp(6)
+  title           String         @db.VarChar
+  description     String         @db.VarChar
+  metadata        String?        @db.VarChar
+  activities      Activity[]
+  user_campaign_s UserCampaign[]
 
   @@map("campaign")
 }
@@ -112,8 +113,6 @@ model Email {
 
   @@map("email")
 }
-
-
 
 model FollowerBusiness {
   follower_id Int
@@ -155,8 +154,6 @@ model Notification {
   @@map("notification")
 }
 
-
-
 model Reply {
   id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
@@ -165,7 +162,7 @@ model Reply {
   likes      Int[]    @default([])
   dislikes   Int[]    @default([])
   user_id    Int
-  reviews    Review   @relation(fields: [review_id], references: [id], onDelete: Cascade)
+  review     Review   @relation(fields: [review_id], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [user_id], references: [id])
 
   @@map("reply")
@@ -188,7 +185,7 @@ model Review {
   criteria_reviews CriteriaReview[]
   notifications    Notification[]
   replies          Reply[]
-  businesses       Business         @relation(fields: [business_id], references: [id])
+  business         Business         @relation(fields: [business_id], references: [id])
   user             User             @relation(fields: [user_id], references: [id])
 
   @@map("review")
@@ -205,11 +202,11 @@ model SearchParam {
 model Social {
   id          Int       @id @default(autoincrement())
   last_update DateTime? @db.Timestamp(6)
-  twitterId   String?   @unique
+  twitter_id  String?
   twitter     String?
-  discordId   String?   @unique
+  discord_id  String?
   discord     String?
-  telegramId  String?   @unique
+  telegram_id String?
   telegram    String?
   user_id     Int       @unique
   user        User      @relation(fields: [user_id], references: [id])
@@ -240,29 +237,30 @@ model SuperUser {
 }
 
 model User {
-  id                      Int                @id @default(autoincrement())
-  created_at              DateTime           @default(now()) @db.Timestamp(6)
-  wallet_address          String             @unique @db.VarChar
-  noti_accepted           Boolean            @default(true)
-  spam_accepted           Boolean            @default(true)
-  email                   String?            @db.VarChar
-  nickname                String?            @db.VarChar
-  avatar_url              String?            @db.VarChar
-  is_admin                Boolean            @default(false)
-  password                String?            @db.VarChar
-  background_url          String?            @db.VarChar
-  did_id                  Int?
-  last_sync_ibt           DateTime?          @db.Timestamp(6)
-  last_update             DateTime?          @db.Timestamp(6)
-  activities              Activity[]
-  followers_on_businesses FollowerBusiness[]
-  notifications           Notification[]     @relation("notification_to_user")
-  rev_notifications       Notification[]     @relation("notification_from_user")
-  replies                 Reply[]
-  reviews                 Review[]
-  socials                 Social?
-  did                     Did?               @relation(fields: [did_id], references: [id])
-  users_on_campaigns      UserCampaign[]
+  id                  Int                @id @default(autoincrement())
+  created_at          DateTime           @default(now()) @db.Timestamp(6)
+  wallet_address      String             @unique @db.VarChar
+  noti_accepted       Boolean            @default(true)
+  spam_accepted       Boolean            @default(true)
+  email               String?            @db.VarChar
+  nickname            String?            @db.VarChar
+  avatar_url          String?            @db.VarChar
+  is_admin            Boolean            @default(false)
+  password            String?            @db.VarChar
+  background_url      String?            @db.VarChar
+  did_id              Int?
+  last_sync_ibt       DateTime?          @db.Timestamp(6)
+  last_update         DateTime?          @db.Timestamp(6)
+  activities          Activity[]
+  notifications       Notification[]     @relation("notification_to_user")
+  rev_notifications   Notification[]     @relation("notification_from_user")
+  replies             Reply[]
+  reviews             Review[]
+  socials             Social?
+  did                 Did?               @relation(fields: [did_id], references: [id])
+  user_campaign_s     UserCampaign[]
+  follower_business_s FollowerBusiness[]
+  rate_business_s     RateBusiness[]
 
   @@map("user")
 }
@@ -272,12 +270,23 @@ model UserCampaign {
   campaign_id Int
   claimed     Boolean  @default(false)
   amount      Int
-  txnHash     String?  @db.VarChar
+  txn_hash    String?  @db.VarChar
   campaigns   Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [user_id], references: [id])
 
   @@id([user_id, campaign_id])
   @@map("user_campaign")
+}
+
+model RateBusiness {
+  valuer_id   Int
+  business_id Int
+  rating      Int
+  businesses  Business @relation(fields: [business_id], references: [id])
+  users       User     @relation(fields: [valuer_id], references: [id])
+
+  @@id([valuer_id, business_id])
+  @@map("rate_business")
 }
 
 enum ActivityKind {

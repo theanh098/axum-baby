@@ -1,6 +1,5 @@
-use super::auth::Guard;
-use crate::database::prisma;
 use crate::AppState;
+use crate::{database::prisma, intercept::sercurity::Guard};
 use axum::{extract::State, Json};
 use error::AppError;
 

@@ -1,17 +1,11 @@
 use crate::database::prisma;
+use crate::intercept::sercurity::Claims;
 use crate::{utils, AppState};
 use anyhow::Result;
-use axum::async_trait;
-use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
 use axum::{extract::State, Json};
-use chrono::Utc;
 use error::AuthError;
 use ethers::types::Signature;
-use jsonwebtoken::{
-  decode, encode, errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header, Validation,
-};
-use serde::de::DeserializeOwned;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use siwe::Message;
 use std::env;
@@ -150,93 +144,4 @@ async fn generate_tokens(
     refresh_token,
     user: user_claims,
   })
-}
-
-/////////// Guard implementation ////////////
-
-#[derive(Serialize, Deserialize)]
-pub struct Claims {
-  pub exp: u32,
-  pub id: i32,
-  pub wallet_address: String,
-  pub is_admin: bool,
-}
-
-impl Claims {
-  pub fn new_access(user_claims: &user_claims::Data) -> Self {
-    Self {
-      exp: Utc::now()
-        .checked_add_signed(chrono::Duration::days(3))
-        .unwrap()
-        .timestamp() as u32,
-      id: user_claims.id,
-      wallet_address: user_claims.wallet_address.to_owned(),
-      is_admin: user_claims.is_admin,
-    }
-  }
-  pub fn new_refresh(user_claims: &user_claims::Data) -> Self {
-    Self {
-      exp: Utc::now()
-        .checked_add_signed(chrono::Duration::days(60))
-        .unwrap()
-        .timestamp() as u32,
-      id: user_claims.id,
-      wallet_address: user_claims.wallet_address.to_owned(),
-      is_admin: user_claims.is_admin,
-    }
-  }
-}
-
-pub struct Guard(pub Claims);
-
-#[async_trait]
-impl<S> FromRequestParts<S> for Guard
-where
-  S: Send + Sync,
-{
-  type Rejection = AuthError;
-
-  async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-    match parts.headers.get("Authorization") {
-      Some(authoration_header) => {
-        if authoration_header.is_empty() {
-          Err(AuthError::MissingCredentials)
-        } else {
-          let token = authoration_header
-            .to_str()
-            .unwrap()
-            .trim_start_matches("Bearer")
-            .trim();
-
-          let access_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
-
-          match decode_jwt::<Claims>(token, access_secret) {
-            Ok(claims) => Ok(Guard(claims)),
-            Err(err) => {
-              if let ErrorKind::ExpiredSignature = err.kind() {
-                Err(AuthError::ExpriedCredentials)
-              } else {
-                Err(AuthError::WrongCredentials)
-              }
-            }
-          }
-        }
-      }
-      None => Err(AuthError::MissingCredentials),
-    }
-  }
-}
-
-fn decode_jwt<T: DeserializeOwned>(
-  token: &str,
-  secret: String,
-) -> Result<T, jsonwebtoken::errors::Error> {
-  match decode::<T>(
-    &token,
-    &DecodingKey::from_secret(secret.as_bytes()),
-    &Validation::new(Algorithm::HS256),
-  ) {
-    Ok(decoded) => Ok(decoded.claims),
-    Err(err) => Err(err),
-  }
 }
