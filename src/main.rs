@@ -44,6 +44,7 @@ async fn main() {
     .route("/auth/nonce", get(services::auth::get_nonce))
     .route("/auth/login", post(services::auth::login))
     .route("/users", get(services::user::who_am_i))
+    .route("/businesses", get(services::business::get_businesses))
     .layer(
       CorsLayer::new()
         .allow_origin(Any)

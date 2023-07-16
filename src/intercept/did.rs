@@ -3,6 +3,7 @@ use crate::AppState;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use std::env;
 
+#[derive(Debug)]
 pub struct Did {
   pub controller_address: String,
   pub ids: Vec<i32>,
