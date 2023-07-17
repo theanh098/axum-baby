@@ -22,6 +22,7 @@ impl FromRequestParts<AppState> for Option<Did> {
         if authoration_header.is_empty() {
           Ok(None)
         } else {
+          dbg!("case else");
           let token = authoration_header
             .to_str()
             .unwrap()
@@ -29,6 +30,8 @@ impl FromRequestParts<AppState> for Option<Did> {
             .trim();
 
           let access_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
+
+          dbg!(token);
 
           match decode_jwt::<Claims>(token, access_secret) {
             Ok(claims) => {

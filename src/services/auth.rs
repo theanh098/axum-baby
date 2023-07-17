@@ -36,7 +36,7 @@ pub async fn login(
   Json(payload): Json<AuthPayload>,
 ) -> Result<Json<Tokens>, AuthError> {
   let AppState {
-    redis_client,
+    mut redis_conn,
     prisma_client,
   } = state;
   let AuthPayload { signature, message } = payload;
@@ -48,7 +48,7 @@ pub async fn login(
           Ok(_) => {
             let wallet_address = siwe::eip55(&siwe_message.address);
             let user_claims = handle_address(wallet_address, prisma_client).await;
-            let tokens = generate_tokens(user_claims, redis_client).await.unwrap();
+            let tokens = generate_tokens(user_claims, &mut redis_conn).await.unwrap();
             Ok(Json(tokens))
           }
           Err(err) => {
@@ -117,7 +117,7 @@ async fn handle_address(
 
 async fn generate_tokens(
   user_claims: user_claims::Data,
-  redis_client: redis::Client,
+  redis_conn: &mut redis::aio::ConnectionManager,
 ) -> Result<Tokens> {
   let secret = env::var("JWT_SECRET")?;
   let refresh_secret = env::var("JWT_REFRESH_SECRET")?;
@@ -130,14 +130,13 @@ async fn generate_tokens(
   let access_token = encode(&header, &Claims::new_access(&user_claims), &secret_key)?;
   let refresh_token = encode(&header, &Claims::new_refresh(&user_claims), &refresh_key)?;
 
-  let mut con = redis_client
-    .get_connection()
-    .expect("getting redis connection fail");
-
-  redis::cmd("SET")
-    .arg(utils::refresh_token_generate((&user_claims).id))
-    .arg(&refresh_token)
-    .query::<()>(&mut con)?;
+  redis_conn
+    .send_packed_command(
+      redis::cmd("SET")
+        .arg(utils::refresh_token_generate((&user_claims).id))
+        .arg(&refresh_token),
+    )
+    .await?;
 
   Ok(Tokens {
     access_token,

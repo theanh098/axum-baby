@@ -1,6 +1,8 @@
+#![recursion_limit = "256"]
 mod database;
 mod intercept;
 mod open_api;
+mod schedulers;
 mod services;
 mod utils;
 use axum::{
@@ -9,8 +11,11 @@ use axum::{
 };
 use database::prisma::PrismaClient;
 use dotenv::dotenv;
+// use futures::prelude::*;
 use open_api::ApiDoc;
+use schedulers::cmc::CmcCrawling;
 use std::sync::Arc;
+use tokio_cron_scheduler::JobScheduler;
 use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -18,7 +23,7 @@ use utoipa_swagger_ui::SwaggerUi;
 #[derive(Clone)]
 pub struct AppState {
   prisma_client: Arc<PrismaClient>,
-  redis_client: redis::Client,
+  redis_conn: redis::aio::ConnectionManager,
 }
 
 #[tokio::main]
@@ -32,11 +37,15 @@ async fn main() {
       .expect("creating prisma was wrong"),
   );
 
-  let redis_client = redis::Client::open("redis://127.0.0.1/").expect("opening redis client fail");
+  let redis_conn = redis::aio::ConnectionManager::new(
+    redis::Client::open("redis://127.0.0.1/").expect("opening redis client fail"),
+  )
+  .await
+  .unwrap();
 
   let app_state = AppState {
     prisma_client,
-    redis_client,
+    redis_conn,
   };
 
   let app = Router::new()
@@ -52,6 +61,10 @@ async fn main() {
         .allow_headers(Any),
     )
     .with_state(app_state);
+
+  let sched = JobScheduler::new().await.unwrap();
+  sched.crawl_cmc().await.unwrap();
+  sched.start().await.unwrap();
 
   // run it with hyper on localhost:8080
   axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())

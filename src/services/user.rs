@@ -21,7 +21,7 @@ prisma::user::select!(me {
 #[utoipa::path(
   get,
   path = "/users",
-  tag = "users",
+  tag = "user",
   responses(
       (status = 200, description = "return your information")
   ),
@@ -40,8 +40,7 @@ pub async fn who_am_i(
     .find_unique(prisma::user::id::equals(claims.id))
     .select(me::select())
     .exec()
-    .await
-    .unwrap()
+    .await?
     .unwrap();
 
   Ok(Json(me))

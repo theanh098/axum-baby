@@ -1,4 +1,5 @@
-use crate::services::user::__path_who_am_i;
+use crate::services::{business::__path_get_businesses, user::__path_who_am_i};
+
 use utoipa::{
   openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
   Modify, OpenApi, ToResponse,
@@ -14,6 +15,7 @@ use utoipa::{
   ),
   paths(
       who_am_i,
+      get_businesses,
     ),
     components(
       schemas(),

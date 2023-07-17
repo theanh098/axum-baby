@@ -25,10 +25,13 @@ axum-macros = "0.3.7"
 anyhow = "1.0.71"
 chrono = "0.4.26"
 jsonwebtoken = "8.3.0"
-redis = "0.23.0"
+redis = { version = "0.23.0", features = ["aio", "tokio-comp", "r2d2", "connection-manager"] }
 dotenv = "0.15.0"
 tower-http = { version = "0.4.1", features = ["cors"] }
 siwe = "0.6.0"
 ethers = "2.0.7"
 utoipa-swagger-ui = { version = "3.1.4", features = ["axum"] }
 utoipa = { version = "3.4.0", features = ["axum_extras"] }
+futures = "0.3.28"
+tokio-cron-scheduler = "0.9.4"
+surf = { version = "2.3.2", features = ["hyper-client"] }
