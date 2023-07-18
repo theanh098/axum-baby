@@ -1,28 +1,38 @@
 use super::sercurity::{decode_jwt, Claims};
-use crate::AppState;
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use crate::database::schema::{did, user};
+use axum::{
+  async_trait,
+  extract::{FromRef, FromRequestParts},
+  http::request::Parts,
+};
+use axum_baby::{internal_error, PgPool};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use std::env;
 
-#[derive(Debug)]
-pub struct Did {
+pub struct UserIdentifier {
   pub controller_address: String,
   pub ids: Vec<i32>,
+  pub id: i32,
+  pub wallet_address: String,
 }
 
+pub struct OptionalGuard(pub Option<UserIdentifier>);
+
 #[async_trait]
-impl FromRequestParts<AppState> for Option<Did> {
+impl<S> FromRequestParts<S> for OptionalGuard
+where
+  S: Send + Sync,
+  PgPool: FromRef<S>,
+{
   type Rejection = ();
 
-  async fn from_request_parts(
-    parts: &mut Parts,
-    state: &AppState,
-  ) -> Result<Self, Self::Rejection> {
+  async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
     match parts.headers.get("Authorization") {
       Some(authoration_header) => {
         if authoration_header.is_empty() {
-          Ok(None)
+          Ok(OptionalGuard(None))
         } else {
-          dbg!("case else");
           let token = authoration_header
             .to_str()
             .unwrap()
@@ -31,49 +41,47 @@ impl FromRequestParts<AppState> for Option<Did> {
 
           let access_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
 
-          dbg!(token);
-
           match decode_jwt::<Claims>(token, access_secret) {
             Ok(claims) => {
-              let prisma_client = &state.prisma_client;
-              use crate::database::prisma::{did, user};
+              let pg_pool = PgPool::from_ref(state);
+              let mut conn = pg_pool.get().await.map_err(internal_error).unwrap();
 
-              let (users, did) = tokio::join!(
-                prisma_client
-                  .user()
-                  .find_many(vec![user::did::is(vec![did::users::some(vec![
-                    user::id::equals(claims.id),
-                  ])])])
-                  .select(user::select!({ id }))
-                  .exec(),
-                prisma_client
-                  .did()
-                  .find_first(vec![did::users::some(vec![user::id::equals(claims.id)])])
-                  .select(did::select!({ controller }))
-                  .exec()
-              );
+              let did: Option<(i32, String)> = did::table
+                .inner_join(user::table.on(user::id.eq(claims.id)))
+                .select((did::id, did::controller))
+                .first(&mut conn)
+                .await
+                .optional()
+                .unwrap();
 
-              let users = users.unwrap();
-              let did = did.unwrap();
+              if let Some((did_id, controller_address)) = did {
+                let users = user::table
+                  .select(user::id)
+                  .filter(user::did_id.eq(did_id))
+                  .load::<i32>(&mut conn)
+                  .await
+                  .unwrap();
 
-              Ok(Some(Did {
-                controller_address: if let Some(did) = did {
-                  did.controller
-                } else {
-                  claims.wallet_address
-                },
-                ids: if users.len() > 0 {
-                  users.iter().map(|u| u.id).collect()
-                } else {
-                  vec![claims.id]
-                },
-              }))
+                Ok(OptionalGuard(Some(UserIdentifier {
+                  controller_address,
+                  ids: users,
+                  id: claims.id,
+                  wallet_address: claims.wallet_address,
+                })))
+              } else {
+                Ok(OptionalGuard(Some(UserIdentifier {
+                  controller_address: claims.wallet_address.clone(),
+                  ids: vec![claims.id],
+                  id: claims.id,
+                  wallet_address: claims.wallet_address,
+                })))
+              }
             }
-            Err(_) => Ok(None),
+            Err(_) => Ok(OptionalGuard(None)),
           }
         }
       }
-      None => Ok(None),
+      None => Ok(OptionalGuard(None)),
     }
   }
 }

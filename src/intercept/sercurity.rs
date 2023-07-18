@@ -1,10 +1,11 @@
-use crate::services::auth::user_claims;
 use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
 use chrono::Utc;
 use error::AuthError;
 use jsonwebtoken::{decode, errors::ErrorKind, Algorithm, DecodingKey, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::env;
+
+use crate::services::auth::UserClaims;
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
@@ -16,7 +17,7 @@ pub struct Claims {
 pub struct Guard(pub Claims);
 
 impl Claims {
-  pub fn new_access(user_claims: &user_claims::Data) -> Self {
+  pub fn new_access(user_claims: &UserClaims) -> Self {
     Self {
       exp: Utc::now()
         .checked_add_signed(chrono::Duration::days(3))
@@ -27,7 +28,7 @@ impl Claims {
       is_admin: user_claims.is_admin,
     }
   }
-  pub fn new_refresh(user_claims: &user_claims::Data) -> Self {
+  pub fn new_refresh(user_claims: &UserClaims) -> Self {
     Self {
       exp: Utc::now()
         .checked_add_signed(chrono::Duration::days(60))

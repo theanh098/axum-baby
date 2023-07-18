@@ -75,6 +75,6 @@ async fn crawl_cryptocurrency_quotes(
       .body_json::<CmcResponse>()
       .await?;
 
-    cmc_query.id.s
+    i += 1;
   }
 }

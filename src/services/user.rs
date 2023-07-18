@@ -1,23 +1,23 @@
-use crate::AppState;
-use crate::{database::prisma, intercept::sercurity::Guard};
-use axum::{extract::State, Json};
+// use crate::intercept::sercurity::Guard;
+// use axum::Json;
+use axum_baby::Postgres;
 use error::AppError;
 
-prisma::user::select!(me {
-  id
-  wallet_address
-  avatar_url
-  background_url
-  email
-  last_sync_ibt
-  last_update
-  nickname
-  did: include {
-    users
-  }
-});
+// use error::AppError;
+// use crate::database::{model::User, schema::user};
+use crate::database::schema::rate_business;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 
-#[axum_macros::debug_handler]
+#[derive(serde::Serialize, Selectable, Queryable, Debug)]
+#[diesel(table_name = rate_business)]
+pub struct RateBusines {
+  pub valuer_id: i32,
+  pub business_id: i32,
+  pub rating: i32,
+}
+
+// #[axum_macros::debug_handler]
 #[utoipa::path(
   get,
   path = "/users",
@@ -29,19 +29,15 @@ prisma::user::select!(me {
     ("BearerAuth" = []),
   )
 )]
-pub async fn who_am_i(
-  Guard(claims): Guard,
-  State(state): State<AppState>,
-) -> Result<Json<me::Data>, AppError> {
-  let prisma_client = state.prisma_client;
-
-  let me = prisma_client
-    .user()
-    .find_unique(prisma::user::id::equals(claims.id))
-    .select(me::select())
-    .exec()
-    .await?
+pub async fn who_am_i(Postgres(mut conn): Postgres) -> Result<String, AppError> {
+  let users = rate_business::table
+    .select(RateBusines::as_select())
+    .limit(12)
+    .load(&mut conn)
+    .await
     .unwrap();
 
-  Ok(Json(me))
+  dbg!(users);
+
+  Ok("fsa".into())
 }

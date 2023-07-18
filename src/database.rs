@@ -1,3 +1,4 @@
-#[allow(warnings, unused)]
-pub mod prisma;
-pub mod query_buider;
+pub mod enum_type;
+pub mod model;
+// pub mod query_buider;
+pub mod schema;
