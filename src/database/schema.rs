@@ -65,7 +65,7 @@ diesel::table! {
         contract_address -> Nullable<Varchar>,
         website -> Nullable<Varchar>,
         types -> Nullable<Array<Nullable<Text>>>,
-        main_category -> Varchar,
+        main_category -> Text,
         chains -> Nullable<Array<Nullable<Text>>>,
         cmc_id -> Nullable<Int4>,
         contract_chain -> Nullable<Varchar>,

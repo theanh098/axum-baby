@@ -3,14 +3,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  // Corresponds to the cargo alias created earlier
-  provider    = "cargo prisma"
-  // The location to generate the client. Is relative to the position of the schema
-  output      = "../src/database/prisma.rs"
-  module_path = "database::prisma"
-}
-
 model Activity {
   id          Int          @id @default(autoincrement())
   created_at  DateTime     @default(now()) @db.Timestamp(6)
@@ -50,13 +42,13 @@ model Business {
   whitepaper_url      String?            @db.VarChar
   contract_address    String?            @db.VarChar
   website             String?            @db.VarChar
-  types               String[]           @db.VarChar
+  types               String[]           
   main_category       String             @db.VarChar
-  chains              String[]           @db.VarChar
+  chains              String[]           
   cmc_id              Int?
   contract_chain      String?            @db.VarChar
   status              BusinessStatus     @default(pending)
-  tags                String[]           @db.VarChar
+  tags                String[]           
   creator_id          Int
   super_users         SuperUser          @relation(fields: [creator_id], references: [id])
   medias              Media[]

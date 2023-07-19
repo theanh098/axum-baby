@@ -1,3 +1,5 @@
+use crate::database::enum_type::{BusinessStatus, MediaSoucre};
+use crate::database::func::random;
 use crate::database::schema::{business, media};
 use crate::intercept::validate::ValidatedQuery;
 use axum::Json;
@@ -23,9 +25,21 @@ pub struct RandomBusinessesQuery {
   banner_only: Option<bool>,
 }
 
+#[derive(Queryable, Debug, Serialize, Selectable, Associations, Identifiable)]
+#[diesel(belongs_to(RandBusiness, foreign_key = business_id))]
+#[diesel(table_name = crate::database::schema::media)]
+pub struct MediasOnRandBusiness {
+  #[serde(skip)]
+  id: i32,
+  url: String,
+  source: MediaSoucre,
+  #[serde(skip)]
+  business_id: i32,
+}
+
 #[derive(Queryable, Debug, Identifiable, Serialize, Selectable)]
 #[diesel(table_name = crate::database::schema::business)]
-pub struct RandBusines {
+pub struct RandBusiness {
   pub id: i32,
   pub name: String,
   pub overview: String,
@@ -36,25 +50,31 @@ pub struct RandBusines {
   pub cmc_id: Option<i32>,
 }
 
+#[derive(Serialize)]
+pub struct RandBusiessWithMedias {
+  #[serde(flatten)]
+  business: RandBusiness,
+  medias: Vec<MediasOnRandBusiness>,
+}
 // #[axum_macros::debug_handler]
 #[utoipa::path(
   get,
   params(
     RandomBusinessesQuery
   ),
-  path = "/businesses",
+  path = "/rand-businesses",
   tag = "business",
   responses(
-      (status = 200, description = "return list businesses")
+      (status = 200, description = "return list random businesses")
   ),
   security(
     ("BearerAuth" = []),
   )
 )]
-pub async fn get_businesses(
+pub async fn get_rand_businesses(
   ValidatedQuery(query): ValidatedQuery<RandomBusinessesQuery>,
   Postgres(mut conn): Postgres,
-) -> Result<Json<Vec<RandBusines>>, AppError> {
+) -> Result<Json<Vec<RandBusiessWithMedias>>, AppError> {
   let RandomBusinessesQuery {
     limit,
     r#type,
@@ -62,17 +82,21 @@ pub async fn get_businesses(
     banner_only,
   } = query;
 
-  let mut query_builder = business::table.into_boxed();
+  let mut query_builder = business::table
+    .left_join(media::table)
+    .into_boxed()
+    .filter(business::status.eq(BusinessStatus::Approved));
 
-  // let mut query_builder = QueryBuider::new();
-  // query_builder.r#where(r#" "b"."status" = 'approved' "#);
+  if let Some(b_type) = r#type {
+    query_builder = query_builder.filter(business::types.contains(vec![b_type]));
+  }
 
-  // if let Some(b_type) = r#type {
-  //   query_builder.and_where(format!(r#" '{b_type}' = ANY("b"."types") "#))
-  // }
+  if let Some(b_main_category) = main_category {
+    query_builder = query_builder.filter(business::main_category.eq(b_main_category));
+  }
 
-  // if let Some(main_category) = main_category {
-  //   query_builder.and_where(format!(r#" "b"."main_category" = '{main_category}' "#))
+  // if banner_only.unwrap_or_default() {
+  //   query_builder = query_builder.
   // }
 
   // if banner_only.unwrap_or_default() {
@@ -87,34 +111,28 @@ pub async fn get_businesses(
   //   )
   // }
 
-  // let data = prisma_client
-  //   ._query_raw::<BusinessId>(raw!(format!(
-  //     r#"
-  //     SELECT
-  //      "b"."id"
-  //     FROM "business" "b"
-  //     {}
-  //     ORDER BY random()
-  //     LIMIT {limit}
-  //     "#,
-  //     query_builder.get_query()
-  //   )
-  //   .as_str()))
-  //   .exec()
-  //   .await?;
+  let rand_businesses: Vec<RandBusiness> = query_builder
+    .select(RandBusiness::as_select())
+    .limit(limit as i64)
+    .order(random())
+    .load::<RandBusiness>(&mut conn)
+    .await
+    .unwrap();
 
-  // let tasks = future::join_all(data.iter().map(|b| async {
-  //   prisma_client
-  //     .business()
-  //     .find_unique(prisma::business::id::equals(b.id))
-  //     .select(rand_business::select())
-  //     .exec()
-  //     .await
-  //     .unwrap()
-  // }))
-  // .await;
+  let medias: Vec<MediasOnRandBusiness> = MediasOnRandBusiness::belonging_to(&rand_businesses)
+    .select(MediasOnRandBusiness::as_select())
+    .filter(media::source.eq(MediaSoucre::Photo))
+    .limit(3)
+    .load::<MediasOnRandBusiness>(&mut conn)
+    .await
+    .unwrap();
 
-  // Ok(Json(tasks))
+  let rand_busiesses_with_medias = medias
+    .grouped_by(&rand_businesses)
+    .into_iter()
+    .zip(rand_businesses)
+    .map(|(medias, business)| RandBusiessWithMedias { business, medias })
+    .collect::<Vec<RandBusiessWithMedias>>();
 
-  todo!()
+  Ok(Json(rand_busiesses_with_medias))
 }

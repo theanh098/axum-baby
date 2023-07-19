@@ -1,5 +1,6 @@
 use super::schema::sql_types;
 use diesel_derive_enum::DbEnum;
+use serde::Serialize;
 
 #[derive(Debug, DbEnum)]
 #[ExistingTypePath = "sql_types::ActivityKind"]
@@ -23,7 +24,7 @@ pub enum BusinessStatus {
   Rejected,
 }
 
-#[derive(Debug, DbEnum)]
+#[derive(Debug, DbEnum, Serialize)]
 #[ExistingTypePath = "sql_types::MediaSoucres"]
 #[DbValueStyle = "PascalCase"]
 pub enum MediaSoucre {
