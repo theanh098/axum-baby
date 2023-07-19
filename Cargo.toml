@@ -10,10 +10,12 @@ resolver = "2"
 
 members = [
     "error",
+    "database",
 ]
 
 [dependencies]
 error = { path = "./error" }
+database = { path = "./database" }
 axum = "0.6.18"
 tokio = { version = "1.29.1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -32,8 +34,6 @@ utoipa = { version = "3.4.0", features = ["axum_extras"] }
 futures = "0.3.28"
 tokio-cron-scheduler = "0.9.4"
 surf = { version = "2.3.2", features = ["hyper-client"] }
-diesel = "2.1.0" 
-diesel-async = { version = "0.3.1", features = ["postgres", "deadpool"] }
-diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 deadpool-redis = { version = "0.12.0", features = ["serde"] }
+sea-orm = { version = "0.11.3", features = ["sqlx-postgres", "runtime-tokio-native-tls", "with-chrono", "with-json", "postgres-array"] }
 # redis = { version = "0.23.0", default-features = false }

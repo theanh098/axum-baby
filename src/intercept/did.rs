@@ -1,15 +1,22 @@
-use super::sercurity::{decode_jwt, Claims};
-use crate::database::schema::{did, user};
+// use super::sercurity::{decode_jwt, Claims};
 use axum::{
   async_trait,
   extract::{FromRef, FromRequestParts},
   http::request::Parts,
 };
-use axum_baby::{internal_error, PgPool};
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use database::prelude::{Did, User};
+use database::{did, user};
+use error::AppError;
+use sea_orm::{
+  sea_query::{Expr, IntoCondition},
+  ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, QueryFilter,
+  QuerySelect, RelationTrait,
+};
 use std::env;
 
+use super::sercurity::{decode_jwt, Claims};
+
+#[derive(FromQueryResult)]
 pub struct UserIdentifier {
   pub controller_address: String,
   pub ids: Vec<i32>,
@@ -23,9 +30,9 @@ pub struct OptionalGuard(pub Option<UserIdentifier>);
 impl<S> FromRequestParts<S> for OptionalGuard
 where
   S: Send + Sync,
-  PgPool: FromRef<S>,
+  DatabaseConnection: FromRef<S>,
 {
-  type Rejection = ();
+  type Rejection = AppError;
 
   async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
     match parts.headers.get("Authorization") {
@@ -43,27 +50,37 @@ where
 
           match decode_jwt::<Claims>(token, access_secret) {
             Ok(claims) => {
-              let pg_pool = PgPool::from_ref(state);
-              let mut conn = pg_pool.get().await.map_err(internal_error).unwrap();
+              let conn = DatabaseConnection::from_ref(state);
 
-              let did: Option<(i32, String)> = did::table
-                .inner_join(user::table.on(user::id.eq(claims.id)))
-                .select((did::id, did::controller))
-                .first(&mut conn)
-                .await
-                .optional()
-                .unwrap();
+              let did = Did::find()
+                .select_only()
+                .columns([did::Column::Id, did::Column::Controller])
+                .join(
+                  JoinType::InnerJoin,
+                  user::Relation::Did
+                    .def()
+                    .rev()
+                    .on_condition(|_left, right| {
+                      Expr::col((right, user::Column::Id))
+                        .eq(claims.id)
+                        .into_condition()
+                    }),
+                )
+                .into_tuple::<(i32, String)>()
+                .one(&conn)
+                .await?;
 
-              if let Some((did_id, controller_address)) = did {
-                let users = user::table
-                  .select(user::id)
-                  .filter(user::did_id.eq(did_id))
-                  .load::<i32>(&mut conn)
-                  .await
-                  .unwrap();
+              if let Some((did_id, controller)) = did {
+                let users = User::find()
+                  .filter(user::Column::DidId.eq(did_id))
+                  .select_only()
+                  .column(user::Column::Id)
+                  .into_tuple::<i32>()
+                  .all(&conn)
+                  .await?;
 
                 Ok(OptionalGuard(Some(UserIdentifier {
-                  controller_address,
+                  controller_address: controller,
                   ids: users,
                   id: claims.id,
                   wallet_address: claims.wallet_address,
@@ -83,5 +100,32 @@ where
       }
       None => Ok(OptionalGuard(None)),
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use database::{did, user};
+  use sea_orm::{DbBackend, QueryTrait};
+
+  #[test]
+  fn query_statement_check() {
+    let join_stament = Did::find()
+      .select_only()
+      .columns([did::Column::Id, did::Column::Controller])
+      .join(
+        JoinType::InnerJoin,
+        user::Relation::Did
+          .def()
+          .rev()
+          .on_condition(|_left, right| {
+            Expr::col((right, user::Column::Id)).eq(12).into_condition()
+          }),
+      )
+      .build(DbBackend::Postgres)
+      .to_string();
+
+    assert_eq!(join_stament, "SELECT \"did\".\"id\", \"did\".\"controller\" FROM \"did\" INNER JOIN \"user\" ON \"did\".\"id\" = \"user\".\"did_id\" AND \"user\".\"id\" = 12");
   }
 }

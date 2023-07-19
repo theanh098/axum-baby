@@ -1,21 +1,23 @@
-use crate::database::schema::user;
 use crate::intercept::sercurity::Claims;
 use crate::utils::refresh_token_generate;
 use anyhow::Result;
 use axum::Json;
-use axum_baby::{PgConnection, Postgres, Redis, RedisConnection};
+use axum_baby::{Postgres, Redis, RedisConnection};
+use database::prelude::{Social, User};
+use database::{social, user};
 use deadpool_redis::redis::cmd;
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
 use error::AuthError;
 use ethers::types::Signature;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use sea_orm::{
+  ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, FromQueryResult, QueryFilter,
+};
 use serde::{Deserialize, Serialize};
 use siwe::Message;
 use std::env;
 
-#[derive(Selectable, Queryable, Debug, Serialize)]
-#[diesel(table_name = crate::database::schema::user)]
+#[derive(FromQueryResult, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserClaims {
   pub id: i32,
   pub wallet_address: String,
@@ -55,7 +57,7 @@ pub async fn login(
         match signature.verify(message, siwe_message.address) {
           Ok(_) => {
             let wallet_address = siwe::eip55(&siwe_message.address);
-            let user_claims = handle_address(wallet_address, &mut pg_conn).await;
+            let user_claims = handle_address(wallet_address, &mut pg_conn).await.unwrap();
             let tokens = generate_tokens(user_claims, &mut redis_conn).await.unwrap();
             Ok(Json(tokens))
           }
@@ -72,46 +74,38 @@ pub async fn login(
   }
 }
 
-async fn handle_address(wallet_address: String, conn: &mut PgConnection) -> UserClaims {
-  let user: Option<UserClaims> = user::table
-    .filter(user::wallet_address.eq(wallet_address.to_owned()))
-    .select(UserClaims::as_select())
-    .first(conn)
-    .await
-    .optional()
-    .unwrap();
+async fn handle_address(
+  wallet_address: String,
+  conn: &DatabaseConnection,
+) -> anyhow::Result<UserClaims> {
+  let user = User::find()
+    .filter(user::Column::WalletAddress.eq(&wallet_address))
+    .into_model::<UserClaims>()
+    .one(conn)
+    .await?;
 
   match user {
-    Some(user) => user,
+    Some(user) => Ok(user),
     None => {
-      #[derive(Insertable)]
-      #[diesel(table_name = crate::database::schema::user)]
-      struct NewUser {
-        wallet_address: String,
-      }
+      let new_user = User::insert(user::ActiveModel {
+        wallet_address: Set(wallet_address.clone()),
+        ..Default::default()
+      })
+      .exec(conn)
+      .await?;
 
-      let new_user = diesel::insert_into(user::table)
-        .values(NewUser { wallet_address })
-        .returning(UserClaims::as_returning())
-        .get_result(conn)
-        .await
-        .unwrap();
+      Social::insert(social::ActiveModel {
+        user_id: Set(new_user.last_insert_id),
+        ..Default::default()
+      })
+      .exec(conn)
+      .await?;
 
-      // prisma_client
-      //   .social()
-      //   .create(
-      //     prisma::user::UniqueWhereParam::IdEquals(new_user.id),
-      //     vec![],
-      //   )
-      //   .exec()
-      //   .await
-      //   .unwrap();
-
-      UserClaims {
-        id: new_user.id,
-        wallet_address: new_user.wallet_address,
+      Ok(UserClaims {
+        id: new_user.last_insert_id,
+        wallet_address,
         is_admin: false,
-      }
+      })
     }
   }
 }

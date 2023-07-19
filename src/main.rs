@@ -1,5 +1,4 @@
 // #![recursion_limit = "256"]
-mod database;
 mod intercept;
 mod open_api;
 mod schedulers;
@@ -11,9 +10,9 @@ use axum::{
 };
 use axum_baby::AppState;
 use dotenv::dotenv;
+use open_api::ApiDoc;
 // use schedulers::cmc::CmcCrawling;
 // use tokio_cron_scheduler::JobScheduler;
-use open_api::ApiDoc;
 use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -37,7 +36,7 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any),
     )
-    .with_state(AppState::new());
+    .with_state(AppState::new().await.unwrap());
 
   // let sched = JobScheduler::new().await.unwrap();
   // sched.crawl_cmc().await.unwrap();

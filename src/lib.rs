@@ -3,38 +3,31 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::{async_trait, extract::FromRef};
 use deadpool_redis::{Config, Runtime};
-use diesel_async::pooled_connection::{
-  deadpool::{Object, Pool as DbPool},
-  AsyncDieselConnectionManager,
-};
-use diesel_async::AsyncPgConnection;
+use sea_orm::{Database, DatabaseConnection};
 
 #[derive(Clone)]
 pub struct AppState {
-  pg_pool: PgPool,
+  pg_conn: DatabaseConnection,
   redis_pool: RedisPool,
 }
 
 impl AppState {
-  pub fn new() -> Self {
+  pub async fn new() -> anyhow::Result<Self> {
     let db_url = std::env::var("DATABASE_URL").expect("db_url must be set");
-
-    let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(db_url);
-    let pg_pool = DbPool::builder(config).build().unwrap();
-
+    let pg_conn: DatabaseConnection = Database::connect(db_url).await?;
     let cfg = Config::from_url("redis://127.0.0.1/");
-    let redis_pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let redis_pool = cfg.create_pool(Some(Runtime::Tokio1))?;
 
-    Self {
-      pg_pool,
+    Ok(Self {
+      pg_conn,
       redis_pool,
-    }
+    })
   }
 }
 
-impl FromRef<AppState> for PgPool {
-  fn from_ref(app_state: &AppState) -> PgPool {
-    app_state.pg_pool.clone()
+impl FromRef<AppState> for DatabaseConnection {
+  fn from_ref(app_state: &AppState) -> DatabaseConnection {
+    app_state.pg_conn.clone()
   }
 }
 
@@ -44,27 +37,23 @@ impl FromRef<AppState> for RedisPool {
   }
 }
 
-pub type PgConnection = Object<AsyncPgConnection>;
 pub type RedisConnection = deadpool_redis::Connection;
 
-pub struct Postgres(pub PgConnection);
 pub struct Redis(pub RedisConnection);
+pub struct Postgres(pub DatabaseConnection);
 
-pub type PgPool = DbPool<AsyncPgConnection>;
 pub type RedisPool = deadpool_redis::Pool;
 
 #[async_trait]
 impl<S> FromRequestParts<S> for Postgres
 where
   S: Send + Sync,
-  PgPool: FromRef<S>,
+  DatabaseConnection: FromRef<S>,
 {
   type Rejection = (StatusCode, String);
 
   async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-    let pg_pool = PgPool::from_ref(state);
-    let conn = pg_pool.get().await.map_err(internal_error)?;
-
+    let conn = DatabaseConnection::from_ref(state);
     Ok(Self(conn))
   }
 }

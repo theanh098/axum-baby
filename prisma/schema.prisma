@@ -32,30 +32,29 @@ model Banner {
 model Business {
   id                  Int                @id @default(autoincrement())
   created_at          DateTime           @default(now()) @db.Timestamp(6)
-  name                String             @unique @db.VarChar
-  overview            String             @db.VarChar
-  token               String?            @db.VarChar
-  logo                String?            @db.VarChar
-  founder_name        String?            @db.VarChar
+  name                String             @unique
+  overview            String
+  token               String?
+  logo                String?
+  founder_name        String?
   start_date          DateTime?          @db.Timestamp(6)
-  address             String?            @db.VarChar
-  whitepaper_url      String?            @db.VarChar
-  contract_address    String?            @db.VarChar
-  website             String?            @db.VarChar
-  types               String[]           
-  main_category       String             @db.VarChar
-  chains              String[]           
+  address             String?
+  whitepaper_url      String?
+  contract_address    String?
+  website             String?
+  types               String[]
+  main_category       String
+  chains              String[]
   cmc_id              Int?
-  contract_chain      String?            @db.VarChar
+  contract_chain      String?
   status              BusinessStatus     @default(pending)
-  tags                String[]           
+  tags                String[]
   creator_id          Int
   super_users         SuperUser          @relation(fields: [creator_id], references: [id])
   medias              Media[]
   notifications       Notification[]
   reviews             Review[]
   follower_business_s FollowerBusiness[]
-  rate_business_s     RateBusiness[]
 
   @@index([cmc_id])
   @@index([cmc_id, token])
@@ -69,9 +68,9 @@ model Business {
 model Campaign {
   id              Int            @id @default(autoincrement())
   created_at      DateTime       @default(now()) @db.Timestamp(6)
-  title           String         @db.VarChar
-  description     String         @db.VarChar
-  metadata        String?        @db.VarChar
+  title           String
+  description     String
+  metadata        String?
   activities      Activity[]
   user_campaign_s UserCampaign[]
 
@@ -101,7 +100,7 @@ model Did {
 model Email {
   id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  email      String   @unique @db.VarChar
+  email      String   @unique
 
   @@map("email")
 }
@@ -117,13 +116,13 @@ model FollowerBusiness {
 }
 
 model Media {
-  id          Int          @id @default(autoincrement())
-  created_at  DateTime     @default(now()) @db.Timestamp(6)
-  url         String       @db.VarChar
+  id          Int         @id @default(autoincrement())
+  created_at  DateTime    @default(now()) @db.Timestamp(6)
+  url         String
   business_id Int
   path        String?
-  source      MediaSoucres
-  businesses  Business     @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  source      MediaSoucre
+  businesses  Business    @relation(fields: [business_id], references: [id], onDelete: Cascade)
 
   @@map("media")
 }
@@ -136,7 +135,7 @@ model Notification {
   seen        Boolean   @default(false)
   to          Int
   from        Int?
-  meta_data   String?   @db.VarChar
+  meta_data   String?
   type        String
   businesses  Business? @relation(fields: [business_id], references: [id])
   reviews     Review?   @relation(fields: [review_id], references: [id], onDelete: Cascade)
@@ -149,7 +148,7 @@ model Notification {
 model Reply {
   id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  desc       String   @db.VarChar
+  desc       String
   review_id  Int
   likes      Int[]    @default([])
   dislikes   Int[]    @default([])
@@ -166,11 +165,11 @@ model Review {
   rate             Int
   business_id      Int
   user_id          Int
-  status           ReviewStatuses   @default(pending)
+  status           ReviewStatus     @default(pending)
   likes            Int[]            @default([])
   dislikes         Int[]            @default([])
-  headline         String?          @db.VarChar
-  comment          String?          @db.VarChar
+  headline         String?
+  comment          String?
   txn_hash         String?          @unique
   sharings         Int[]            @default([])
   activities       Activity[]
@@ -209,20 +208,20 @@ model Social {
 model Storage {
   id         Int      @id @default(autoincrement())
   created_at DateTime @default(now()) @db.Timestamp(6)
-  url        String   @db.VarChar
-  tag        String?  @db.VarChar
+  url        String
+  tag        String?
   banners    Banner[]
 
   @@map("storage")
 }
 
 model SuperUser {
-  id            Int            @id @default(autoincrement())
-  role          SuperUserRoles
-  refresh_token String?        @db.VarChar
-  username      String         @unique @db.VarChar
-  password      String         @db.VarChar
-  avatar        String?        @db.VarChar
+  id            Int           @id @default(autoincrement())
+  role          SuperUserRole
+  refresh_token String?
+  username      String        @unique
+  password      String
+  avatar        String?
   businesses    Business[]
 
   @@map("super_user")
@@ -231,15 +230,15 @@ model SuperUser {
 model User {
   id                  Int                @id @default(autoincrement())
   created_at          DateTime           @default(now()) @db.Timestamp(6)
-  wallet_address      String             @unique @db.VarChar
+  wallet_address      String             @unique
   noti_accepted       Boolean            @default(true)
   spam_accepted       Boolean            @default(true)
-  email               String?            @db.VarChar
-  nickname            String?            @db.VarChar
-  avatar_url          String?            @db.VarChar
+  email               String?
+  nickname            String?
+  avatar_url          String?
   is_admin            Boolean            @default(false)
-  password            String?            @db.VarChar
-  background_url      String?            @db.VarChar
+  password            String?
+  background_url      String?
   did_id              Int?
   last_sync_ibt       DateTime?          @db.Timestamp(6)
   last_update         DateTime?          @db.Timestamp(6)
@@ -252,7 +251,6 @@ model User {
   did                 Did?               @relation(fields: [did_id], references: [id])
   user_campaign_s     UserCampaign[]
   follower_business_s FollowerBusiness[]
-  rate_business_s     RateBusiness[]
 
   @@map("user")
 }
@@ -262,23 +260,12 @@ model UserCampaign {
   campaign_id Int
   claimed     Boolean  @default(false)
   amount      Int
-  txn_hash    String?  @db.VarChar
+  txn_hash    String?
   campaigns   Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [user_id], references: [id])
 
   @@id([user_id, campaign_id])
   @@map("user_campaign")
-}
-
-model RateBusiness {
-  valuer_id   Int
-  business_id Int
-  rating      Int
-  businesses  Business @relation(fields: [business_id], references: [id])
-  users       User     @relation(fields: [valuer_id], references: [id])
-
-  @@id([valuer_id, business_id])
-  @@map("rate_business")
 }
 
 enum ActivityKind {
@@ -298,7 +285,7 @@ enum BusinessStatus {
   rejected
 }
 
-enum MediaSoucres {
+enum MediaSoucre {
   Photo
   Telegram
   Discord
@@ -306,13 +293,13 @@ enum MediaSoucres {
   Blog
 }
 
-enum ReviewStatuses {
+enum ReviewStatus {
   approved
   pending
   rejected
 }
 
-enum SuperUserRoles {
+enum SuperUserRole {
   admin
   editor
 }
