@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::native_enum::MediaSoucre;
+use crate::native_enum::MediaSource;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
 #[sea_orm(table_name = "media")]
@@ -16,7 +16,7 @@ pub struct Model {
   pub business_id: i32,
   #[sea_orm(column_type = "Text", nullable)]
   pub path: Option<String>,
-  pub source: MediaSoucre,
+  pub source: MediaSource,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

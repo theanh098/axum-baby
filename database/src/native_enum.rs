@@ -2,7 +2,7 @@ use sea_orm::{DeriveActiveEnum, EnumIter};
 use serde::{Deserialize, Serialize};
 
 #[derive(EnumIter, DeriveActiveEnum, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "ActivityKind")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "activity_kind")]
 pub enum ActivityKind {
   #[sea_orm(string_value = "reviewapproved")]
   Reviewapproved,
@@ -23,7 +23,7 @@ pub enum ActivityKind {
 }
 
 #[derive(EnumIter, DeriveActiveEnum, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "BusinessStatus")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "business_status")]
 pub enum BusinessStatus {
   #[sea_orm(string_value = "approved")]
   Approved,
@@ -34,8 +34,8 @@ pub enum BusinessStatus {
 }
 
 #[derive(EnumIter, DeriveActiveEnum, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "MediaSoucre")]
-pub enum MediaSoucre {
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "media_source")]
+pub enum MediaSource {
   #[sea_orm(string_value = "Photo")]
   Photo,
   #[sea_orm(string_value = "Telegram")]
@@ -49,7 +49,7 @@ pub enum MediaSoucre {
 }
 
 #[derive(EnumIter, DeriveActiveEnum, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "tea")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "review_status")]
 pub enum ReviewStatus {
   #[sea_orm(string_value = "approved")]
   Approved,
@@ -60,7 +60,7 @@ pub enum ReviewStatus {
 }
 
 #[derive(EnumIter, DeriveActiveEnum, PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "tea")]
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "super_user_role")]
 pub enum SuperUserRole {
   #[sea_orm(string_value = "admin")]
   Admin,

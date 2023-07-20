@@ -60,8 +60,8 @@ where
                   user::Relation::Did
                     .def()
                     .rev()
-                    .on_condition(move |_left, right| {
-                      Expr::col((right, user::Column::Id))
+                    .on_condition(move |_did_table, user_table| {
+                      Expr::col((user_table, user::Column::Id))
                         .eq(claims.id)
                         .into_condition()
                     }),

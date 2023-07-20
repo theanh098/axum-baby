@@ -1,20 +1,20 @@
+use self::response::*;
 use crate::intercept::validate::ValidatedQuery;
 use axum::Json;
 use axum_baby::Postgres;
-use database::native_enum::{BusinessStatus, MediaSoucre};
+use database::native_enum::{BusinessStatus, MediaSource};
 use database::{
   prelude::{Business, Media},
   {business, media},
 };
 use error::AppError;
-use sea_orm::sea_query::{Func, PgFunc};
+use sea_orm::sea_query::{Alias, PgFunc};
 use sea_orm::{
   query::*,
   sea_query::{Expr, IntoCondition},
-  ColumnTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QuerySelect, RelationTrait,
+  ColumnTrait, EntityTrait, JoinType, QueryFilter, QuerySelect, RelationTrait,
 };
 use serde::Deserialize;
-use serde::Serialize;
 use utoipa::IntoParams;
 use validator::Validate;
 
@@ -29,31 +29,6 @@ pub struct RandomBusinessesQuery {
   main_category: Option<String>,
 
   banner_only: Option<bool>,
-}
-
-#[derive(Debug, Serialize, FromQueryResult)]
-pub struct MediasOnRandBusiness {
-  url: String,
-  source: MediaSoucre,
-}
-
-#[derive(Debug, Serialize, FromQueryResult)]
-pub struct RandBusiness {
-  pub id: i32,
-  pub name: String,
-  pub overview: String,
-  pub token: Option<String>,
-  pub logo: Option<String>,
-  pub types: Option<Vec<String>>,
-  pub main_category: String,
-  pub cmc_id: Option<i32>,
-}
-
-#[derive(Serialize)]
-pub struct RandBusiessWithMedias {
-  #[serde(flatten)]
-  business: business::Model,
-  medias: Vec<media::Model>,
 }
 
 // #[axum_macros::debug_handler]
@@ -105,12 +80,14 @@ pub async fn get_rand_businesses(
             .rev()
             .on_condition(|_business_table, media_table| {
               Expr::col((media_table, media::Column::Source))
-                .eq(MediaSoucre::Photo)
+                .cast_as(Alias::new("text"))
+                .eq(MediaSource::Photo)
                 .into_condition()
             }),
         )
         .group_by(business::Column::Id)
     })
+    .order_by_asc(Expr::cust("random()"))
     .limit(limit as u64)
     .all(&conn)
     .await?;
@@ -122,11 +99,72 @@ pub async fn get_rand_businesses(
     .zip(medias)
     .map(|(business, medias)| RandBusiessWithMedias {
       business: business.into(),
-      medias: medias.into(),
+      medias: medias
+        .into_iter()
+        .filter(|m| m.source == MediaSource::Photo)
+        .take(3)
+        .map(|m| m.into())
+        .collect::<Vec<MediasOnRandBusiness>>(),
     })
     .collect::<Vec<RandBusiessWithMedias>>();
 
   Ok(Json(rs))
+}
+
+mod response {
+
+  use database::{business, media, native_enum::MediaSource};
+  use sea_orm::FromQueryResult;
+  use serde::Serialize;
+
+  #[derive(Debug, Serialize, FromQueryResult)]
+  pub struct MediasOnRandBusiness {
+    url: String,
+    source: MediaSource,
+  }
+
+  #[derive(Debug, Serialize, FromQueryResult)]
+  pub struct RandBusiness {
+    pub id: i32,
+    pub name: String,
+    pub overview: String,
+    pub token: Option<String>,
+    pub logo: Option<String>,
+    pub types: Option<Vec<String>>,
+    pub main_category: String,
+    pub cmc_id: Option<i32>,
+  }
+
+  #[derive(Serialize)]
+  pub struct RandBusiessWithMedias {
+    #[serde(flatten)]
+    pub business: RandBusiness,
+    pub medias: Vec<MediasOnRandBusiness>,
+  }
+
+  impl From<business::Model> for RandBusiness {
+    fn from(bn: business::Model) -> Self {
+      Self {
+        id: bn.id,
+        name: bn.name,
+        overview: bn.overview,
+        token: bn.token,
+        logo: bn.logo,
+        types: bn.types,
+        main_category: bn.main_category,
+        cmc_id: bn.cmc_id,
+      }
+    }
+  }
+
+  impl From<media::Model> for MediasOnRandBusiness {
+    fn from(media: media::Model) -> Self {
+      Self {
+        url: media.url,
+        source: media.source,
+      }
+    }
+  }
 }
 
 #[cfg(test)]
@@ -150,7 +188,7 @@ mod tests {
           )))),
         ))
       })
-      .apply_if(None, |query, v: bool| {
+      .apply_if(Some(true), |query, _v: bool| {
         query
           .join(
             JoinType::InnerJoin,
@@ -159,13 +197,14 @@ mod tests {
               .rev()
               .on_condition(|_left, right| {
                 Expr::col((right, media::Column::Source))
-                  .eq(MediaSoucre::Photo)
+                  .cast_as(Alias::new("text"))
+                  .eq(MediaSource::Photo)
                   .into_condition()
               }),
           )
           .group_by(business::Column::Id)
       })
-      // .into_model::<(RandBusiness, Vec<MediasOnRandBusiness>)>()
+      .order_by_asc(Expr::cust("random()"))
       .limit(100 as u64)
       .build(DbBackend::Postgres)
       .to_string();
