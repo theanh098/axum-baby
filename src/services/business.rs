@@ -7,9 +7,8 @@ use database::{
   {business, media},
 };
 use error::AppError;
-use sea_orm::DeriveModel;
+use sea_orm::sea_query::{Func, PgFunc};
 use sea_orm::{
-  entity::*,
   query::*,
   sea_query::{Expr, IntoCondition},
   ColumnTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QuerySelect, RelationTrait,
@@ -34,12 +33,8 @@ pub struct RandomBusinessesQuery {
 
 #[derive(Debug, Serialize, FromQueryResult)]
 pub struct MediasOnRandBusiness {
-  #[serde(skip)]
-  id: i32,
   url: String,
   source: MediaSoucre,
-  #[serde(skip)]
-  business_id: i32,
 }
 
 #[derive(Debug, Serialize, FromQueryResult)]
@@ -57,9 +52,10 @@ pub struct RandBusiness {
 #[derive(Serialize)]
 pub struct RandBusiessWithMedias {
   #[serde(flatten)]
-  business: RandBusiness,
-  medias: Vec<MediasOnRandBusiness>,
+  business: business::Model,
+  medias: Vec<media::Model>,
 }
+
 // #[axum_macros::debug_handler]
 #[utoipa::path(
   get,
@@ -86,76 +82,94 @@ pub async fn get_rand_businesses(
     banner_only,
   } = query;
 
-  // let mut query_builder = business::table
-  //   .left_join(media::table)
-  //   .into_boxed()
-  //   .filter(business::status.eq(BusinessStatus::Approved));
-
-  let rand_businesses = Business::find()
+  let rand_busiesses = Business::find()
     .filter(business::Column::Status.eq(BusinessStatus::Approved))
-    .select_only()
-    .columns([
-      business::Column::Id,
-      business::Column::Name,
-      business::Column::Overview,
-      business::Column::Token,
-      business::Column::Logo,
-      business::Column::Types,
-      business::Column::MainCategory,
-      business::Column::CmcId,
-    ])
     .apply_if(main_category, |query, v| {
       query.filter(business::Column::MainCategory.eq(v))
     })
     .apply_if(r#type, |query, v| {
-      query.filter(business::Column::Types.contains(&v))
+      query.filter(Expr::eq(
+        Expr::val(v),
+        Expr::expr(PgFunc::any(Expr::col((
+          business::Entity,
+          business::Column::Types,
+        )))),
+      ))
     })
-    .apply_if(banner_only, |query, v| {
+    .apply_if(banner_only, |query, _v| {
       query
         .join(
           JoinType::InnerJoin,
           media::Relation::Business
             .def()
             .rev()
-            .on_condition(|_left, right| {
-              Expr::col((right, media::Column::Source))
+            .on_condition(|_business_table, media_table| {
+              Expr::col((media_table, media::Column::Source))
                 .eq(MediaSoucre::Photo)
                 .into_condition()
             }),
         )
         .group_by(business::Column::Id)
     })
-    // .into_model::<RandBusiness>()
-    // .into_tuple::<(i32, String)>()
+    .limit(limit as u64)
     .all(&conn)
     .await?;
 
-  let medias = rand_businesses.load_many(Media, &conn).await?;
+  let medias = rand_busiesses.load_many(Media, &conn).await?;
 
-  todo!()
+  let rs = rand_busiesses
+    .into_iter()
+    .zip(medias)
+    .map(|(business, medias)| RandBusiessWithMedias {
+      business: business.into(),
+      medias: medias.into(),
+    })
+    .collect::<Vec<RandBusiessWithMedias>>();
 
-  // let rand_businesses: Vec<RandBusiness> = query_builder
-  //   .select(RandBusiness::as_select())
-  //   .limit(limit as i64)
-  //   .order(random())
-  //   .load::<RandBusiness>(&mut conn)
-  //   .await
-  //   .unwrap();
+  Ok(Json(rs))
+}
 
-  // let medias: Vec<MediasOnRandBusiness> = MediasOnRandBusiness::belonging_to(&rand_businesses)
-  //   .select(MediasOnRandBusiness::as_select())
-  //   .filter(media::source.eq(MediaSoucre::Photo))
-  //   .limit(3)
-  //   .load::<MediasOnRandBusiness>(&mut conn)
-  //   .await
-  //   .unwrap();
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use sea_orm::{sea_query::PgFunc, DbBackend, QueryTrait};
 
-  // let rand_busiesses_with_medias = medias
-  //   .grouped_by(&rand_businesses)
-  //   .into_iter()
-  //   .zip(rand_businesses)
-  //   .map(|(medias, business)| RandBusiessWithMedias { business, medias })
-  //   .collect::<Vec<RandBusiessWithMedias>>();
+  #[test]
+  fn query_statement_check() {
+    let join_stament = Business::find()
+      .filter(business::Column::Status.eq(BusinessStatus::Approved))
+      .apply_if(Some("cmm_main"), |query, v| {
+        query.filter(business::Column::MainCategory.eq(v))
+      })
+      .apply_if(Some("cmm_type"), |query, v| {
+        query.filter(Expr::eq(
+          Expr::val(v),
+          Expr::expr(PgFunc::any(Expr::col((
+            business::Entity,
+            business::Column::Types,
+          )))),
+        ))
+      })
+      .apply_if(None, |query, v: bool| {
+        query
+          .join(
+            JoinType::InnerJoin,
+            media::Relation::Business
+              .def()
+              .rev()
+              .on_condition(|_left, right| {
+                Expr::col((right, media::Column::Source))
+                  .eq(MediaSoucre::Photo)
+                  .into_condition()
+              }),
+          )
+          .group_by(business::Column::Id)
+      })
+      // .into_model::<(RandBusiness, Vec<MediasOnRandBusiness>)>()
+      .limit(100 as u64)
+      .build(DbBackend::Postgres)
+      .to_string();
 
-  // Ok(Json(rand_busiesses_with_medias))
+    assert_eq!(join_stament, "SELECT \"did\".\"id\", \"did\".\"controller\" FROM \"did\" INNER JOIN \"user\" ON \"did\".\"id\" = \"user\".\"did_id\" AND \"user\".\"id\" = 12");
+  }
 }
