@@ -7,9 +7,13 @@ use database::{
   {business, media},
 };
 use error::AppError;
-use sea_orm::FromQueryResult;
-use sea_orm::QuerySelect;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::DeriveModel;
+use sea_orm::{
+  entity::*,
+  query::*,
+  sea_query::{Expr, IntoCondition},
+  ColumnTrait, EntityTrait, FromQueryResult, JoinType, QueryFilter, QuerySelect, RelationTrait,
+};
 use serde::Deserialize;
 use serde::Serialize;
 use utoipa::IntoParams;
@@ -73,7 +77,7 @@ pub struct RandBusiessWithMedias {
 )]
 pub async fn get_rand_businesses(
   ValidatedQuery(query): ValidatedQuery<RandomBusinessesQuery>,
-  Postgres(mut conn): Postgres,
+  Postgres(conn): Postgres,
 ) -> Result<Json<Vec<RandBusiessWithMedias>>, AppError> {
   let RandomBusinessesQuery {
     limit,
@@ -100,66 +104,58 @@ pub async fn get_rand_businesses(
       business::Column::MainCategory,
       business::Column::CmcId,
     ])
-    .apply_if(main_category, |mut query, v| {
+    .apply_if(main_category, |query, v| {
       query.filter(business::Column::MainCategory.eq(v))
     })
-    .apply_if(r#type, |mut query, v| {
+    .apply_if(r#type, |query, v| {
       query.filter(business::Column::Types.contains(&v))
     })
-    .apply_if(banner_only, |mut query, v| {
+    .apply_if(banner_only, |query, v| {
       query
-        .left_join(Media)
+        .join(
+          JoinType::InnerJoin,
+          media::Relation::Business
+            .def()
+            .rev()
+            .on_condition(|_left, right| {
+              Expr::col((right, media::Column::Source))
+                .eq(MediaSoucre::Photo)
+                .into_condition()
+            }),
+        )
         .group_by(business::Column::Id)
-        .having(media::Column::Id.count().gt(0))
-    });
+    })
+    // .into_model::<RandBusiness>()
+    // .into_tuple::<(i32, String)>()
+    .all(&conn)
+    .await?;
 
-  // if let Some(b_type) = r#type {
-  //   // query_builder = query_builder.filter(business::types.contains(vec![b_type]));
+  let medias = rand_businesses.load_many(Media, &conn).await?;
 
-  // }
+  todo!()
 
-  // if let Some(b_main_category) = main_category {
-  //   query_builder = query_builder.filter(business::main_category.eq(b_main_category));
-  // }
+  // let rand_businesses: Vec<RandBusiness> = query_builder
+  //   .select(RandBusiness::as_select())
+  //   .limit(limit as i64)
+  //   .order(random())
+  //   .load::<RandBusiness>(&mut conn)
+  //   .await
+  //   .unwrap();
 
-  // if banner_only.unwrap_or_default() {
-  //   query_builder = query_builder.
-  // }
+  // let medias: Vec<MediasOnRandBusiness> = MediasOnRandBusiness::belonging_to(&rand_businesses)
+  //   .select(MediasOnRandBusiness::as_select())
+  //   .filter(media::source.eq(MediaSoucre::Photo))
+  //   .limit(3)
+  //   .load::<MediasOnRandBusiness>(&mut conn)
+  //   .await
+  //   .unwrap();
 
-  // if banner_only.unwrap_or_default() {
-  //   query_builder.and_where(
-  //     r#"
-  //     (
-  //       SELECT COUNT("m"."id") FROM "media" "m"
-  //       WHERE "m"."business_id" = "b"."id"
-  //       AND "m"."source" = 'Photo'
-  //     ) > 0
-  //     "#,
-  //   )
-  // }
+  // let rand_busiesses_with_medias = medias
+  //   .grouped_by(&rand_businesses)
+  //   .into_iter()
+  //   .zip(rand_businesses)
+  //   .map(|(medias, business)| RandBusiessWithMedias { business, medias })
+  //   .collect::<Vec<RandBusiessWithMedias>>();
 
-  let rand_businesses: Vec<RandBusiness> = query_builder
-    .select(RandBusiness::as_select())
-    .limit(limit as i64)
-    .order(random())
-    .load::<RandBusiness>(&mut conn)
-    .await
-    .unwrap();
-
-  let medias: Vec<MediasOnRandBusiness> = MediasOnRandBusiness::belonging_to(&rand_businesses)
-    .select(MediasOnRandBusiness::as_select())
-    .filter(media::source.eq(MediaSoucre::Photo))
-    .limit(3)
-    .load::<MediasOnRandBusiness>(&mut conn)
-    .await
-    .unwrap();
-
-  let rand_busiesses_with_medias = medias
-    .grouped_by(&rand_businesses)
-    .into_iter()
-    .zip(rand_businesses)
-    .map(|(medias, business)| RandBusiessWithMedias { business, medias })
-    .collect::<Vec<RandBusiessWithMedias>>();
-
-  Ok(Json(rand_busiesses_with_medias))
+  // Ok(Json(rand_busiesses_with_medias))
 }
