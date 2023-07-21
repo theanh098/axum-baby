@@ -4,6 +4,8 @@ mod open_api;
 mod schedulers;
 mod services;
 mod utils;
+use std::env;
+
 use axum::{
   routing::{get, post},
   Router,
@@ -19,6 +21,8 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() {
+  env::set_var("RUST_LOG", "debug");
+  tracing_subscriber::fmt::init();
   dotenv().ok();
 
   let app = Router::new()
@@ -30,6 +34,7 @@ async fn main() {
       "/rand-businesses",
       get(services::business::get_rand_businesses),
     )
+    .route("/businesses", get(services::business::get_by_categories))
     .layer(
       CorsLayer::new()
         .allow_origin(Any)

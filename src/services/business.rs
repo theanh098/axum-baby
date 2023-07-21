@@ -31,7 +31,6 @@ pub struct RandomBusinessesQuery {
   banner_only: Option<bool>,
 }
 
-// #[axum_macros::debug_handler]
 #[utoipa::path(
   get,
   params(
@@ -92,7 +91,12 @@ pub async fn get_rand_businesses(
     .all(&conn)
     .await?;
 
-  let medias = rand_busiesses.load_many(Media, &conn).await?;
+  let medias = rand_busiesses
+    .load_many(
+      Media::find().filter(media::Column::Source.eq(MediaSource::Photo)),
+      &conn,
+    )
+    .await?;
 
   let rs = rand_busiesses
     .into_iter()
@@ -101,7 +105,6 @@ pub async fn get_rand_businesses(
       business: business.into(),
       medias: medias
         .into_iter()
-        .filter(|m| m.source == MediaSource::Photo)
         .take(3)
         .map(|m| m.into())
         .collect::<Vec<MediasOnRandBusiness>>(),
@@ -109,6 +112,83 @@ pub async fn get_rand_businesses(
     .collect::<Vec<RandBusiessWithMedias>>();
 
   Ok(Json(rs))
+}
+
+#[derive(Deserialize, IntoParams, Validate)]
+#[into_params(parameter_in = Query)]
+pub struct BusinessesCategoryQuery {
+  types: Option<String>,
+  main_category: Option<String>,
+  chain: Option<String>,
+  sort: Option<Sort>,
+}
+#[derive(Deserialize)]
+enum Sort {
+  Lastest,
+  BestRating,
+  MostReview,
+}
+
+impl Default for Sort {
+  fn default() -> Self {
+    Self::Lastest
+  }
+}
+#[utoipa::path(
+  get,
+  params(
+    BusinessesCategoryQuery
+  ),
+  path = "/businesses",
+  tag = "business",
+  responses(
+      (status = 200, description = "return list businesses")
+  ),
+  security(
+    ("BearerAuth" = []),
+  )
+)]
+pub async fn get_by_categories(
+  ValidatedQuery(query): ValidatedQuery<BusinessesCategoryQuery>,
+  Postgres(conn): Postgres,
+) -> Result<Json<Vec<business::Model>>, AppError> {
+  let BusinessesCategoryQuery {
+    chain,
+    main_category,
+    sort,
+    types,
+  } = query;
+
+  let main_category = if types.is_none() { main_category } else { None };
+
+  let busiesses = Business::find()
+    .filter(business::Column::Status.eq(BusinessStatus::Approved))
+    .apply_if(main_category, |query, main_category| {
+      query.filter(business::Column::MainCategory.eq(main_category))
+    })
+    .apply_if(chain, |query, chain| {
+      query.filter(Expr::eq(
+        Expr::val(chain),
+        Expr::expr(PgFunc::any(Expr::col((
+          business::Entity,
+          business::Column::Chains,
+        )))),
+      ))
+    })
+    .apply_if(types, |query, types| {
+      query.filter(Expr::cust_with_exprs(
+        "ARRAY_CAT($1,$2)::text[] && ARRAY[$3]",
+        [
+          Expr::col(business::Column::Types).into(),
+          Expr::col(business::Column::Tags).into(),
+          Expr::val(types).into(),
+        ],
+      ))
+    })
+    .all(&conn)
+    .await?;
+
+  Ok(Json(busiesses))
 }
 
 mod response {
